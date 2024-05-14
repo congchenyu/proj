@@ -22,7 +22,7 @@ const CarouselComponent = ({ slides }) => {
     };
 
     const captureElement = async (element) => {
-        const canvas = await html2canvas(element);
+        const canvas = await html2canvas(element, { useCORS: true });
         const imageData = canvas.toDataURL('image/png');
         return { imageData, width: canvas.width, height: canvas.height };
     };
@@ -45,14 +45,14 @@ const CarouselComponent = ({ slides }) => {
         pdf.save(fileName);
     };
 
-    const downloadCurrentSlidePdf = () => {
+    const downloadCurrentSlidePdf = async () => {
         console.log("Download current slide button clicked.");
         const element = carouselRef.current.querySelector('.slick-active');
         if (!element) {
             console.error("Active slide not found!");
             return;
         }
-        handleDownloadPDF(element, 'current-slide.pdf');
+        await handleDownloadPDF(element, 'current-slide.pdf');
     };
 
     const downloadPdf = async () => {
@@ -88,7 +88,7 @@ const CarouselComponent = ({ slides }) => {
         <div className="carousel-container" ref={carouselRef}>
             <Slider {...settings}>
                 {slides.map((slide, index) => (
-                    <div key={index} className={`slide ${index !== 0 ? "common-background" : ""}`} data-index={index}>
+                    <div key={index} className={`slide common-background`} data-index={index}>
                         <h2 className="title">{slide.title}</h2>
                         {slide.content && slide.content.split('  ').map((paragraph, idx) => (
                             <p key={idx} className="content">{paragraph.trim()}</p>
