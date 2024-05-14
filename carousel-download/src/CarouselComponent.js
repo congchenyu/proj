@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Slider from 'react-slick';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import './CarouselComponent.css';
 
 const CarouselComponent = ({ slides }) => {
+    const carouselRef = useRef(null);
     const [currentSlide, setCurrentSlide] = useState(0);
     const settings = {
         dots: true,
@@ -19,84 +21,74 @@ const CarouselComponent = ({ slides }) => {
         afterChange: current => setCurrentSlide(current)
     };
 
-    const addWrappedText = (text, doc, x, y, maxWidth, lineHeight) => {
-        const words = text.split(" ");
-        let line = "";
-        let newY = y;
+    const captureElement = async (element) => {
+        const canvas = await html2canvas(element);
+        const imageData = canvas.toDataURL('image/png');
+        return { imageData, width: canvas.width, height: canvas.height };
+    };
 
-        words.forEach((word) => {
-            const testLine = line + word + " ";
-            const metrics = doc.getTextDimensions(testLine);
-            if (metrics.w > maxWidth) {
-                doc.text(line, x, newY);
-                line = word + " ";
-                newY += lineHeight;
-            } else {
-                line = testLine;
-            }
-        });
-
-        doc.text(line.trim(), x, newY);
-        return newY + lineHeight;
+    const handleDownloadPDF = async (element, fileName) => {
+        if (!element) {
+            console.error("Element to capture not found!");
+            return;
+        }
+        const { imageData, width, height } = await captureElement(element);
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const ratio = Math.min(pdfWidth / width, pdfHeight / height);
+        const imgWidth = width * ratio;
+        const imgHeight = height * ratio;
+        const imgX = (pdfWidth - imgWidth) / 2;
+        const imgY = (pdfHeight - imgHeight) / 2;
+        pdf.addImage(imageData, 'PNG', imgX, imgY, imgWidth, imgHeight);
+        pdf.save(fileName);
     };
 
     const downloadCurrentSlidePdf = () => {
-        const slide = slides[currentSlide];
-        const doc = new jsPDF('p', 'pt', 'a4');
-        doc.setFontSize(22);
-        doc.text(slide.title, 40, 40);
-        let cursorY = 80;
-
-        doc.setFontSize(16);
-
-        if (slide.content) {
-            cursorY = addWrappedText(slide.content, doc, 40, cursorY, 520, 20);
+        console.log("Download current slide button clicked.");
+        const element = carouselRef.current.querySelector('.slick-active');
+        if (!element) {
+            console.error("Active slide not found!");
+            return;
         }
-
-        if (slide.image) {
-            const imgHeight = 150;  
-            const imgWidth = 520;   
-            if (cursorY + imgHeight > doc.internal.pageSize.height) {
-                doc.addPage();
-                cursorY = 40; 
-            }
-            doc.addImage(slide.image, 'JPEG', 40, cursorY, imgWidth, imgHeight);
-        }
-
-        doc.save(`${slide.title}.pdf`);
+        handleDownloadPDF(element, 'current-slide.pdf');
     };
 
-    const downloadPdf = () => {
-        const doc = new jsPDF('p', 'pt', 'a4');
-        let cursorY = 40;
-
-        slides.forEach((slide, index) => {
-            if (index > 0) {
-                doc.addPage();
-                cursorY = 40; 
+    const downloadPdf = async () => {
+        console.log("Download all slides button clicked.");
+        if (!carouselRef.current) {
+            console.error("Carousel reference not found!");
+            return;
+        }
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        for (let i = 0; i < slides.length; i++) {
+            const element = carouselRef.current.querySelector(`.slick-slide[data-index="${i}"]`);
+            if (!element) {
+                console.error(`Slide ${i} not found!`);
+                continue;
             }
-            doc.setFontSize(22);
-            doc.text(slide.title, 40, cursorY);
-            cursorY += 40;  
-
-            doc.setFontSize(16);
-            if (slide.content) {
-                cursorY = addWrappedText(slide.content, doc, 40, cursorY, 520, 20) + 20;  
+            const { imageData, width, height } = await captureElement(element);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const ratio = Math.min(pdfWidth / width, pdfHeight / height);
+            const imgWidth = width * ratio;
+            const imgHeight = height * ratio;
+            const imgX = (pdfWidth - imgWidth) / 2;
+            const imgY = (pdfHeight - imgHeight) / 2;
+            if (i > 0) {
+                pdf.addPage();
             }
-
-            if (slide.image) {
-                doc.addImage(slide.image, 'JPEG', 40, cursorY, 520, 150);
-                cursorY += 160;  
-            }
-        });
-        doc.save('carousel-content.pdf');
+            pdf.addImage(imageData, 'PNG', imgX, imgY, imgWidth, imgHeight);
+        }
+        pdf.save('all-slides.pdf');
     };
 
     return (
-        <div className="carousel-container">
+        <div className="carousel-container" ref={carouselRef}>
             <Slider {...settings}>
                 {slides.map((slide, index) => (
-                    <div key={index} className={`slide ${index !== 0 ? "common-background" : ""}`}>
+                    <div key={index} className={`slide ${index !== 0 ? "common-background" : ""}`} data-index={index}>
                         <h2 className="title">{slide.title}</h2>
                         {slide.content && slide.content.split('  ').map((paragraph, idx) => (
                             <p key={idx} className="content">{paragraph.trim()}</p>
@@ -131,4 +123,4 @@ function SamplePrevArrow(props) {
     );
 }
 
-export default CarouselComponent; 
+export default CarouselComponent;
